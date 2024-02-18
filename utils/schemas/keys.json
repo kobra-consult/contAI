@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/chatgpt.schema.json",
+  "title": "Keys",
+  "description": "Keys to use chat gpt",
+  "type": "object",
+  "properties": {
+    "api_key": {
+      "type": "string",
+      "description": "The API key."
+    },
+    "org": {
+      "type": "string",
+      "description": "The organization identifier."
+    }
+  },
+  "required": ["api_key", "org"]
+}
