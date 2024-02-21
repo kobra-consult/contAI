@@ -1,9 +1,9 @@
-import os
-
-from openai import OpenAI, AsyncOpenAI
+from openai import OpenAI, AsyncOpenAI, RateLimitError, APIStatusError
 from token_reports import num_tokens_from_messages
 from utils import utils
 from dotenv import load_dotenv
+from configs import tokens_authentication, context_dict
+from typing import Union, Dict, Any
 import asyncio
 import openai
 
@@ -22,18 +22,25 @@ message = [
 model = utils.get_env("MODEL")
 
 
-def set_message(instruction, question):
+def set_message(session_id, instruction, qa, role='user', response_data=None):
     message = [
-        {
-            "role": "system",
-            "content": instruction
-        },
-        {
-            "role": "user",
-            "content": question
-        },
+        {"role": "system", "content": instruction},
+        {"role": role, "content": qa}
     ]
-    return message
+    if response_data:
+        message.append({"role": "assistant", "content": response_data})
+
+    context_dict[session_id].append({'role': role, 'content': message})
+
+
+# Authentication verification function
+def verify_authentication(token):
+    return token in tokens_authentication
+
+
+# Function to initiate a new thread
+def start_thread(session_id):
+    context_dict[session_id] = []
 
 
 def open_ai_config(API_KEY=None, ORG=None):
@@ -47,19 +54,41 @@ def open_ai_config(API_KEY=None, ORG=None):
     return client_ai
 
 
-async def run_questions(instruction, question):
+async def run_questions(session_id: str, instruction: str, question: str) -> Union[
+    str, BaseException, None, RateLimitError, APIStatusError]:
+    """
+    :param session_id: optional
+    :param instruction: required
+    :param question: required
+    :return: Dict[str, Any] or Exception
+    """
+
     client = open_ai_config()
     try:
-        message = set_message(instruction, question)
+        set_message(session_id, instruction, question, 'user')
         completion = await client.chat.completions.create(
-            # response_format={"type": "json_object"},
             model=model,
-            messages=message,
+            messages=context_dict[session_id],
             frequency_penalty=1
 
             # max_tokens=100,
             # temperature=0
         )
+        response_data = {
+            'id': completion['id'],
+            'object': completion['object'],
+            'created': completion['created'],
+            'model': completion['model'],
+            'usage': completion['usage'],
+            'system_fingerprint': completion['system_fingerprint']
+        }
+
+        set_message(session_id=session_id,
+                    instruction='Models answers:',
+                    qa=completion['choices'][0]['message']['content'],
+                    role='assistant',
+                    response_data=response_data)
+
         return completion.json()
     except openai.APIConnectionError as e:
         print(ValueError("The server could not be reached"))
@@ -83,7 +112,6 @@ async def get_thread_message(thread_id):
     client = open_ai_config()
     completion = await client.beta.threads.messages.list(thread_id=thread_id)
     return completion.json()
-
 
 # keys = utils.read_file("utils/keys_auth.json")
 

@@ -1,3 +1,4 @@
+from uuid import uuid4
 import json
 import os
 
@@ -10,3 +11,7 @@ def read_file(f):
 
 def get_env(var):
     return os.environ.get(var)
+
+
+def generate_new_session_id():
+    return str(uuid4())
