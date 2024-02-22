@@ -1,8 +1,11 @@
+import json
+import uuid
+from datetime import datetime, timedelta
 from openai import OpenAI, AsyncOpenAI, RateLimitError, APIStatusError
 from token_reports import num_tokens_from_messages
 from utils import utils
 from dotenv import load_dotenv
-from configs import tokens_authentication, context_dict
+import configs
 from typing import Union, Dict, Any
 import asyncio
 import openai
@@ -20,9 +23,12 @@ message = [
     },
 ]
 model = utils.get_env("MODEL")
+context_dict = configs.context_dict
+threads_dict = configs.threads_dict
+tokens_authentication = configs.tokens_authentication
 
 
-def set_message(session_id, instruction, qa, role='user', response_data=None):
+def set_message(session_id, thread_id, instruction, qa, role='user', response_data=None):
     message = [
         {"role": "system", "content": instruction},
         {"role": role, "content": qa}
@@ -30,7 +36,13 @@ def set_message(session_id, instruction, qa, role='user', response_data=None):
     if response_data:
         message.append({"role": "assistant", "content": response_data})
 
-    context_dict[session_id].append({'role': role, 'content': message})
+    # Update the context with the message, session, and thread information
+    context_dict[session_id].append({
+        'role': role,
+        'content': message,
+        'thread_id': thread_id,
+        'timestamp': datetime.utcnow().isoformat() + "Z"
+    })
 
 
 # Authentication verification function
@@ -38,9 +50,21 @@ def verify_authentication(token):
     return token in tokens_authentication
 
 
-# Function to initiate a new thread
 def start_thread(session_id):
-    context_dict[session_id] = []
+    thread_id = str(uuid.uuid4())
+    start_time = datetime.utcnow().isoformat() + "Z"
+    end_time = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
+
+    # Add the new thread to the threads dictionary
+    threads_dict[thread_id] = {
+        "session_id": session_id,
+        "start_time": start_time,
+        "end_time": end_time,
+        "status": "active",
+        "messages": []
+    }
+
+    return thread_id
 
 
 def open_ai_config(API_KEY=None, ORG=None):
@@ -54,10 +78,11 @@ def open_ai_config(API_KEY=None, ORG=None):
     return client_ai
 
 
-async def run_questions(session_id: str, instruction: str, question: str) -> Union[
+async def run_questions(session_id: str, thread_id: str, instruction: str, question: str) -> Union[
     str, BaseException, None, RateLimitError, APIStatusError]:
     """
-    :param session_id: optional
+    :param session_id: required
+    :param thread_id: required
     :param instruction: required
     :param question: required
     :return: Dict[str, Any] or Exception
@@ -65,10 +90,10 @@ async def run_questions(session_id: str, instruction: str, question: str) -> Uni
 
     client = open_ai_config()
     try:
-        set_message(session_id, instruction, question, 'user')
+        set_message(session_id, thread_id, instruction, question, 'user')
         completion = await client.chat.completions.create(
             model=model,
-            messages=context_dict[session_id],
+            messages=configs.context_dict[session_id],
             frequency_penalty=1
 
             # max_tokens=100,
@@ -101,17 +126,29 @@ async def run_questions(session_id: str, instruction: str, question: str) -> Uni
         return e
 
 
-async def list_threads():
-    client = open_ai_config()
-    completion = await client.beta.threads.create()
-    print(completion)
-    return completion.json()
+def list_threads():
+    # Fetch information about local threads from context_dict
+    local_threads = [
+        {
+            "session_id": thread_data["session_id"],
+            "start_time": thread_data["start_time"],
+            "end_time": thread_data["end_time"],
+            "status": thread_data["status"],
+            "thread_id": thread_id,
+        }
+        for thread_id, thread_data in context_dict.items()
+    ]
+
+    return json.dumps({"local_threads": local_threads})
 
 
-async def get_thread_message(thread_id):
-    client = open_ai_config()
-    completion = await client.beta.threads.messages.list(thread_id=thread_id)
-    return completion.json()
+def get_thread_message(thread_id):
+    # Fetch messages from the specified local thread
+    if thread_id in context_dict:
+        messages = context_dict[thread_id].get("messages", [])
+        return json.dumps({"messages": messages})
+    else:
+        return json.dumps({"error": "Thread not found"}), 404
 
 # keys = utils.read_file("utils/keys_auth.json")
 

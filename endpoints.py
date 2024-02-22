@@ -9,36 +9,47 @@ app = Flask(__name__)
 gpt_core_calls = Blueprint('gpt_core', __name__, template_folder='templates')
 
 
-@app.route('/api/autenticar', methods=['POST'])
-def autenticar():
+@gpt_core_calls.route('/api/authenticate', methods=['POST'])
+def authenticate():
     data = request.json
-    token_autenticacao = data.get('token', None)
+    token_authentication = data.get('token', None)
 
-    # Adicionar token à lista de tokens de autenticação válidos
-    gpt_core.tokens_authentication.add(token_autenticacao)
+    # Add token to the list of valid authentication tokens
+    gpt_core.tokens_authentication.add(token_authentication)
 
-    return jsonify({'status': 'Autenticação bem-sucedida'})
+    return jsonify({'status': 'Authentication successful'})
 
 
-@gpt_core_calls.route('/api/iniciar_thread', methods=['POST'])
+@gpt_core_calls.route('/api/start_thread', methods=['POST'])
 def start_new_thread():
     data = request.json
     session_id = data.get('session_id', utils.generate_new_session_id())
+    # Start a new thread and get the thread_id
+    thread_id = gpt_core.start_thread(session_id)
 
-    gpt_core.start_thread(session_id)
-
-    return jsonify({'status': 'New thread started', 'session_id': session_id})
+    return jsonify({'status': 'Thread started', 'session_id': session_id, 'thread_id': thread_id})
 
 
-@gpt_core_calls.route('/question', methods=['POST'])
+@gpt_core_calls.route('/api/question', methods=['POST'])
 def send_q():
+    # Extract data from the request
     data = json.loads(request.data)
-    session_id = data.get('session_id', utils.generate_new_session_id())
     token_authentication = data.get('token', None)
 
     # Verify authentication
     if not gpt_core.verify_authentication(token_authentication):
         return jsonify({'error': 'Invalid authentication'}), 401
+
+    # Generate a new session_id if not provided
+    session_id = data.get('session_id', utils.generate_new_session_id())
+
+    # Check if a thread already exists for the session
+    if session_id not in gpt_core.context_dict:
+        # If not, create a new thread
+        thread_id = asyncio.run(gpt_core.start_thread(session_id))
+    else:
+        # If yes, use the existing thread
+        thread_id = gpt_core.context_dict[session_id]['thread_id']
 
     if "instruction" not in data:
         err = {"error": "No instruction in given data"}
@@ -56,7 +67,7 @@ def send_q():
             mimetype='application/json')
         return response
 
-    completion = asyncio.run(gpt_core.run_questions(session_id, data["instruction"], data["question"]))
+    completion = asyncio.run(gpt_core.run_questions(session_id, thread_id, data["instruction"], data["question"]))
     # TODO validate errors
     response = app.response_class(
         response=completion,
@@ -66,7 +77,7 @@ def send_q():
     return response
 
 
-@gpt_core_calls.route("/threads")
+@gpt_core_calls.route("/api/threads")
 def get_threads():
     response = app.response_class(
         response=asyncio.run(gpt_core.list_threads()),
@@ -75,7 +86,7 @@ def get_threads():
     return response
 
 
-@gpt_core_calls.route("/threads-message/<string:thread_id>")
+@gpt_core_calls.route("/api/threads-message/<string:thread_id>")
 def get_thread_message(thread_id):
     thread_message = asyncio.run(gpt_core.get_thread_message(thread_id))
     if not json.loads(thread_message)['data']:
@@ -111,8 +122,9 @@ def user_feedback():
     session_id = data.get('session_id', utils.generate_new_session_id())
     user_feedback = data.get('user_feedback', '')
 
-    # Process user feedback (implement as needed)
-    # For example, you can send feedback to OpenAI to improve the model
+    # TODO
+    # Process user feedback (implement)
+    # Send feedback to OpenAI to improve the model
 
     return jsonify({'status': 'Feedback received', 'session_id': session_id})
 
@@ -128,8 +140,8 @@ def reset_conversation():
     return jsonify({'status': 'Conversation reset', 'session_id': session_id})
 
 
-# Endpoint para configurar parâmetros
-@gpt_core_calls.route('/api/configurar', methods=['POST'])
+# Endpoint to configure the parameters
+@gpt_core_calls.route('/api/config', methods=['POST'])
 def configure_parameters():
     data = request.json
     session_id = data.get('session_id', utils.generate_new_session_id())
