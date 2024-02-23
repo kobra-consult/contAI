@@ -5,7 +5,7 @@ from openai import AsyncOpenAI, RateLimitError, APIStatusError
 from utils import utils
 from dotenv import load_dotenv
 import configs
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, List
 import openai
 
 message = [
@@ -24,22 +24,25 @@ threads_dict = configs.threads_dict
 tokens_authentication = configs.tokens_authentication
 
 
-def set_message(session_id, thread_id, instruction, qa, role='user', response_data=None):
-    message = [
-        {"role": "system", "content": instruction},
-        {"role": role, "content": qa}
-    ]
+def set_message(session_id, thread_id, messages, response_data=None):
+    if not context_dict.get(session_id):
+        context_dict[session_id] = {"messages": []}
+
+    if "messages" not in context_dict[session_id]:
+        context_dict[session_id]["messages"] = []
+
+    for msg in messages:
+        content = msg.get('content', '')
+        role = msg.get('role')
+
+        msg_dict = {'role': role, 'content': content}
+        context_dict[session_id]["messages"].append(msg_dict)
+
     if response_data:
-        message.append({"role": "assistant", "content": response_data})
+        context_dict[session_id]["messages"].append({'role': 'assistant', 'content': response_data})
 
-    # Update the context with the message, session, and thread information
-
-    context_dict[session_id] = {
-        'role': role,
-        'content': message,
-        'thread_id': thread_id,
-        'timestamp': datetime.utcnow().isoformat() + "Z"
-    }
+    context_dict[session_id]['thread_id'] = thread_id
+    context_dict[session_id]['timestamp'] = datetime.utcnow().isoformat() + "Z"
 
 
 # Authentication verification function
@@ -81,44 +84,40 @@ def open_ai_config(API_KEY=None, ORG=None):
     return client_ai
 
 
-async def run_questions(session_id: str, thread_id: str, instruction: str, question: str) -> Union[
+async def run_questions(session_id: str, thread_id: str, messages: List[Dict[str, str]]) -> Union[
     str, BaseException, None, RateLimitError, APIStatusError]:
     """
-    :param session_id: required
-    :param thread_id: required
-    :param instruction: required
-    :param question: required
+    :param session_id: optional
+    :param thread_id: unique identifier for the thread
+    :param messages: list of message dictionaries containing role, content, and other fields
     :return: Dict[str, Any] or Exception
     """
 
     client = open_ai_config()
     try:
-        set_message(session_id, thread_id, instruction, question, 'user')
+        set_message(session_id, thread_id, messages)
         completion = await client.chat.completions.create(
             model=model,
-            messages=context_dict[session_id]['content'],
+            messages=messages,
             frequency_penalty=1
-
             # max_tokens=100,
             # temperature=0
         )
 
         response_data = {
-            'id': completion['id'],
-            'object': completion['object'],
-            'created': completion['created'],
-            'model': completion['model'],
-            'usage': completion['usage'],
-            'system_fingerprint': completion['system_fingerprint']
+            'id': completion.id,
+            'object': completion.object,
+            'created': completion.created,
+            'model': completion.model,
+            'usage': completion.usage.dict(),
+            'system_fingerprint': completion.system_fingerprint
         }
-
         set_message(session_id=session_id,
-                    instruction='Models answers:',
-                    qa=completion['choices'][0]['message']['content'],
-                    role='assistant',
+                    thread_id=thread_id,
+                    messages=[{'role': 'assistant', 'content': completion.choices[0].message.content}],
                     response_data=response_data)
-
-        return completion.json()
+        print(json.dumps(context_dict, indent=4), "\n\n")
+        return completion.model_dump_json()
     except openai.APIConnectionError as e:
         print(ValueError("The server could not be reached"))
         return e.__cause__  # an underlying Exception, likely raised within httpx.

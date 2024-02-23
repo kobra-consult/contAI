@@ -1,4 +1,5 @@
 from flask import Blueprint, Flask, request, jsonify
+from openai import AuthenticationError
 import asyncio
 import gpt_core
 import json
@@ -34,46 +35,55 @@ def start_new_thread():
 def send_q():
     # Extract data from the request
     data = json.loads(request.data)
-    token_authentication = data.get('token', None)
+    # token_authentication = data.get('token', '')
 
-    # Verify authentication
-    # if not gpt_core.verify_authentication(token_authentication):
-    #     return jsonify({'error': 'Invalid authentication'}), 401
+    try:
+        # Verify authentication
+        # if not gpt_core.verify_authentication(token_authentication):
+        #     return jsonify({'error': 'Invalid authentication'}), 401
 
-    # Generate a new session_id if not provided
-    session_id = data.get('session_id', utils.generate_new_session_id())
+        # Generate a new session_id if not provided
+        session_id = data.get('session_id', utils.generate_new_session_id())
+        # Check if a thread already exists for the session
+        if session_id not in gpt_core.context_dict:
+            # If not, create a new thread
+            thread_id = asyncio.run(gpt_core.start_thread(session_id))
+        else:
+            # If yes, use the existing thread
+            thread_id = gpt_core.context_dict[session_id]['thread_id']
 
-    # Check if a thread already exists for the session
-    if session_id not in gpt_core.context_dict:
-        # If not, create a new thread
-        thread_id = asyncio.run(gpt_core.start_thread(session_id))
-    else:
-        # If yes, use the existing thread
-        thread_id = gpt_core.context_dict[session_id]['thread_id']
-    if "instruction" not in data:
-        err = {"error": "No instruction in given data"}
+        # Extract messages from the request
+        messages = data.get('content', [])
+
+        # Validate the presence of 'instruction' and 'question' in messages
+        for msg in messages:
+            if msg.get('instruction') is None and msg.get('question') is None:
+                err = {"error": "Each message in content should have either 'instruction' or 'question'"}
+                response = app.response_class(
+                    response=json.dumps(err),
+                    status=400,
+                    mimetype='application/json')
+                return response
+
+        # Prepare the payload for OpenAI API
+        message_payload = [{'role': 'system', 'content': msg['instruction']} for msg in messages if msg.get('instruction')] + \
+                          [{'role': 'user', 'content': msg['question']} for msg in messages if msg.get('question')]
+
+        completion = asyncio.run(gpt_core.run_questions(session_id, thread_id, message_payload))
+        # TODO validate errors
         response = app.response_class(
-            response=json.dumps(err),
-            status=400,
-            mimetype='application/json')
+            response=completion,
+            status=200,
+            mimetype='application/json'
+        )
         return response
-
-    if "question" not in data:
-        err = {"error": "No question in given data"}
-        response = app.response_class(
-            response=json.dumps(err),
-            status=400,
-            mimetype='application/json')
-        return response
-
-    completion = asyncio.run(gpt_core.run_questions(session_id, thread_id, data["instruction"], data["question"]))
-    # TODO validate errors
-    response = app.response_class(
-        response=completion,
-        status=200,
-        mimetype='application/json'
-    )
-    return response
+    except AuthenticationError as e:
+        # Handle AuthenticationError separately
+        return jsonify({'error': 'Authentication failed'}), 401
+    except Exception as e:
+        print(e)
+        # Handle other exceptions
+        return jsonify({'error': 'An unexpected error occurred'}), 500
 
 
 @gpt_core_calls.route("/api/threads")
