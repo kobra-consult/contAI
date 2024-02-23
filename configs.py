@@ -2,7 +2,7 @@
 tokens_authentication = set()
 
 # Dictionary to track conversation context by session
-context_dict = {}
+context_dict = dict()
 
 # Dictionary to track threads
-threads_dict = {}
+threads_dict = dict()

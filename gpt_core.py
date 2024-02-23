@@ -1,16 +1,12 @@
 import json
 import uuid
 from datetime import datetime, timedelta
-from openai import OpenAI, AsyncOpenAI, RateLimitError, APIStatusError
-from token_reports import num_tokens_from_messages
+from openai import AsyncOpenAI, RateLimitError, APIStatusError
 from utils import utils
 from dotenv import load_dotenv
 import configs
 from typing import Union, Dict, Any
-import asyncio
 import openai
-
-load_dotenv()
 
 message = [
     {
@@ -37,12 +33,13 @@ def set_message(session_id, thread_id, instruction, qa, role='user', response_da
         message.append({"role": "assistant", "content": response_data})
 
     # Update the context with the message, session, and thread information
-    context_dict[session_id].append({
+
+    context_dict[session_id] = {
         'role': role,
         'content': message,
         'thread_id': thread_id,
         'timestamp': datetime.utcnow().isoformat() + "Z"
-    })
+    }
 
 
 # Authentication verification function
@@ -50,7 +47,7 @@ def verify_authentication(token):
     return token in tokens_authentication
 
 
-def start_thread(session_id):
+async def start_thread(session_id):
     thread_id = str(uuid.uuid4())
     start_time = datetime.utcnow().isoformat() + "Z"
     end_time = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
@@ -63,11 +60,17 @@ def start_thread(session_id):
         "status": "active",
         "messages": []
     }
+    # Add session_id to context_dict
+    context_dict[session_id] = {
+        "thread_id": thread_id,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
 
     return thread_id
 
 
 def open_ai_config(API_KEY=None, ORG=None):
+    load_dotenv()
     if API_KEY is None:
         API_KEY = utils.get_env("API_KEY")
 
@@ -93,12 +96,13 @@ async def run_questions(session_id: str, thread_id: str, instruction: str, quest
         set_message(session_id, thread_id, instruction, question, 'user')
         completion = await client.chat.completions.create(
             model=model,
-            messages=configs.context_dict[session_id],
+            messages=context_dict[session_id]['content'],
             frequency_penalty=1
 
             # max_tokens=100,
             # temperature=0
         )
+
         response_data = {
             'id': completion['id'],
             'object': completion['object'],

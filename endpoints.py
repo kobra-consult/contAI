@@ -37,8 +37,8 @@ def send_q():
     token_authentication = data.get('token', None)
 
     # Verify authentication
-    if not gpt_core.verify_authentication(token_authentication):
-        return jsonify({'error': 'Invalid authentication'}), 401
+    # if not gpt_core.verify_authentication(token_authentication):
+    #     return jsonify({'error': 'Invalid authentication'}), 401
 
     # Generate a new session_id if not provided
     session_id = data.get('session_id', utils.generate_new_session_id())
@@ -50,7 +50,6 @@ def send_q():
     else:
         # If yes, use the existing thread
         thread_id = gpt_core.context_dict[session_id]['thread_id']
-
     if "instruction" not in data:
         err = {"error": "No instruction in given data"}
         response = app.response_class(
