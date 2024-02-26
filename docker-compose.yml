@@ -1,0 +1,30 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=S3cret
+      - POSTGRES_USER=contai
+      - POSTGRES_DB=contai
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
+#Docker Networks
+networks:
+  app-network:
+    driver: bridge
+
+#Docker Volumes
+volumes:
+  database-data:
+    driver: local

@@ -39,9 +39,9 @@ def set_message(session_id, thread_id, messages, response_data=None):
         context_dict[session_id]["messages"].append(msg_dict)
 
     if response_data:
-        context_dict[session_id]["messages"].append({'role': 'assistant', 'content': response_data})
+        context_dict[session_id]["messages"][-1]["statistics"] = {'role': 'assistant', 'content': response_data}
 
-    context_dict[session_id]['thread_id'] = thread_id
+    context_dict[session_id]['thread_id'] = thread_id  # Use the new thread key
     context_dict[session_id]['timestamp'] = datetime.utcnow().isoformat() + "Z"
 
 
