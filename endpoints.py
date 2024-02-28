@@ -52,7 +52,6 @@ def send_q():
             # If yes, use the existing thread
             thread_id = gpt_core.context_dict[session_id]['thread_id']
 
-
         # Extract messages from the request
         messages = data.get('content', [])
 
