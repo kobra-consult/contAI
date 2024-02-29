@@ -31,8 +31,11 @@ class GPTCore:
         self.tokens_authentication = configs.tokens_authentication
         self.db_config = load_config()
         self.db_manager = DatabaseManager(self.db_config)
+        self.conn = None
 
     def set_message(self, session_id, thread_id, messages, response_data=None):
+        self.connect_to_db()
+
         if not self.context_dict.get(session_id):
             self.context_dict[session_id] = {"messages": []}
 
@@ -45,8 +48,12 @@ class GPTCore:
 
             msg_dict = {'role': role, 'content': content}
             self.context_dict[session_id]["messages"].append(msg_dict)
+            self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow(), "")
 
         if response_data:
+            role = 'assistant'
+            content = response_data['choices'][0]['message']['content']
+            self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow(), response_data['id'])
             self.context_dict[session_id]["messages"][-1]["statistics"] = {'role': 'assistant',
                                                                            'content': response_data}
 
@@ -58,10 +65,15 @@ class GPTCore:
         return token in self.tokens_authentication
 
     async def start_thread(self, session_id):
+        # Connect to the database
+        self.connect_to_db()
+
         thread_id = str(uuid.uuid4())
         start_time = datetime.utcnow().isoformat() + "Z"
         end_time = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
 
+        self.db_manager.insert_session(self.conn, session_id)
+        self.db_manager.insert_thread(self.conn, thread_id, session_id, start_time, end_time, 'active')
         # Add the new thread to the threads dictionary
         self.threads_dict[thread_id] = {
             "session_id": session_id,
@@ -91,8 +103,16 @@ class GPTCore:
 
         return client_ai
 
-    def connection(self):
-        return self.db_manager.connect()
+    def connect_to_db(self):
+        """Connect to the database."""
+        if not self.conn or self.conn.closed != 0:
+            self.conn = self.db_manager.connect()
+
+    def close_db_connection(self):
+        """Close the database connection."""
+        if self.conn:
+            self.conn.close()
+            print("Connection to the database closed.")
 
     async def run_questions(self, session_id: str, thread_id: str, messages: List[Dict[str, str]]) -> Union[
         str, BaseException, None, RateLimitError, APIStatusError]:
@@ -104,7 +124,11 @@ class GPTCore:
         """
 
         client = self.open_ai_config()
+        # Connect to the database
+        self.connect_to_db()
+
         try:
+
             self.set_message(session_id, thread_id, messages)
             completion = await client.chat.completions.create(
                 model=self.model,
@@ -114,6 +138,11 @@ class GPTCore:
                 # temperature=0
             )
 
+            self.db_manager.insert_statistics(self.conn, 'assistant', completion.id, self.model,
+                                              completion.choices[0].message.usage['completion_tokens'],
+                                              completion.choices[0].message.usage['prompt_tokens'],
+                                              completion.choices[0].message.usage['total_tokens'],
+                                              completion.system_fingerprint)
             response_data = {
                 'id': completion.id,
                 'object': completion.object,
