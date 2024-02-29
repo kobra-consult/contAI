@@ -7,6 +7,7 @@ api = Api(app)
 
 app.register_blueprint(gpt_core_calls)
 
+
 if __name__ == "__main__":
     app.run(debug=True)
 
