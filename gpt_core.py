@@ -78,7 +78,8 @@ class GPTCore:
 
         return thread_id
 
-    def open_ai_config(self, API_KEY=None, ORG=None):
+    @staticmethod
+    def open_ai_config(API_KEY=None, ORG=None):
         load_dotenv()
         if API_KEY is None:
             API_KEY = utils.get_env("API_KEY")
