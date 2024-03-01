@@ -13,5 +13,5 @@ def get_env(var):
     return os.environ.get(var)
 
 
-def generate_new_session_id():
+def generate_new_id():
     return str(uuid4())

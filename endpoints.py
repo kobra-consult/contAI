@@ -28,7 +28,7 @@ class Endpoints:
     @gpt_core_calls.route('/api/start_thread', methods=['POST'])
     def start_new_thread():
         data = request.json
-        session_id = data.get('session_id', utils.generate_new_session_id())
+        session_id = data.get('session_id', utils.generate_new_id())
         # Start a new thread and get the thread_id
         thread_id = gpt_core_instance.start_thread(session_id)
 
@@ -47,7 +47,7 @@ class Endpoints:
             #     return jsonify({'error': 'Invalid authentication'}), 401
 
             # Generate a new session_id if not provided
-            session_id = data.get('session_id', utils.generate_new_session_id())
+            session_id = data.get('session_id', utils.generate_new_id())
             # Check if a thread already exists for the session
             if session_id not in gpt_core_instance.context_dict:
                 # If not, create a new thread
@@ -119,7 +119,7 @@ class Endpoints:
     @gpt_core_calls.route('/api/history', methods=['GET'])
     def get_history():
         data = request.args
-        session_id = data.get('session_id', utils.generate_new_session_id())
+        session_id = data.get('session_id', utils.generate_new_id())
 
         if session_id not in gpt_core_instance.context_dict:
             return jsonify({'error': 'Invalid session ID'}), 400
@@ -132,7 +132,7 @@ class Endpoints:
     @gpt_core_calls.route('/api/feedback', methods=['POST'])
     def user_feedback():
         data = request.json
-        session_id = data.get('session_id', utils.generate_new_session_id())
+        session_id = data.get('session_id', utils.generate_new_id())
         user_feedback = data.get('user_feedback', '')
 
         # TODO
@@ -145,7 +145,7 @@ class Endpoints:
     @gpt_core_calls.route('/api/reset', methods=['POST'])
     def reset_conversation():
         data = request.json
-        session_id = data.get('session_id', utils.generate_new_session_id())
+        session_id = data.get('session_id', utils.generate_new_id())
 
         # Reset conversation context for the provided session
         gpt_core_instance.context_dict[session_id] = {}
@@ -157,7 +157,7 @@ class Endpoints:
     @gpt_core_calls.route('/api/config', methods=['POST'])
     def configure_parameters():
         data = request.json
-        session_id = data.get('session_id', utils.generate_new_session_id())
+        session_id = data.get('session_id', utils.generate_new_id())
         max_tokens = data.get('max_tokens', 150)
 
         # Configure parameters for the provided session

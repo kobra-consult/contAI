@@ -45,29 +45,34 @@ class GPTCore:
         for msg in messages:
             content = msg.get('content', '')
             role = msg.get('role')
-
             msg_dict = {'role': role, 'content': content}
             self.context_dict[session_id]["messages"].append(msg_dict)
-            self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow())
 
-        if response_data:
-            completion_id = response_data['id']
-            role = 'assistant'
-            completion_tokens = response_data['usage']['completion_tokens']
-            model = response_data['model']
-            prompt_tokens = response_data['usage']['prompt_tokens']
-            total_tokens = response_data['usage']['total_tokens']
-            system_fingerprint = response_data['system_fingerprint']
-            self.db_manager.insert_statistics(self.conn,
-                                              role=role,
-                                              completion_id=completion_id,
-                                              model=model,
-                                              completion_tokens=completion_tokens,
-                                              prompt_tokens=prompt_tokens,
-                                              total_tokens=total_tokens,
-                                              system_fingerprint=system_fingerprint)
-            self.context_dict[session_id]["messages"][-1]["statistics"] = {'role': 'assistant',
-                                                                           'content': response_data}
+            if response_data:
+                statistics_id = utils.generate_new_id()
+                completion_id = response_data['id']
+                role = 'assistant'
+                completion_tokens = response_data['usage']['completion_tokens']
+                model = response_data['model']
+                prompt_tokens = response_data['usage']['prompt_tokens']
+                total_tokens = response_data['usage']['total_tokens']
+                system_fingerprint = response_data['system_fingerprint']
+                self.db_manager.insert_statistics(self.conn,
+                                                  statistics_id=statistics_id,
+                                                  role=role,
+                                                  completion_id=completion_id,
+                                                  model=model,
+                                                  completion_tokens=completion_tokens,
+                                                  prompt_tokens=prompt_tokens,
+                                                  total_tokens=total_tokens,
+                                                  system_fingerprint=system_fingerprint)
+                self.context_dict[session_id]["messages"][-1]["statistics"] = {'role': 'assistant',
+                                                                               'content': response_data}
+
+                self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow(), statistics_id)
+                continue
+
+            self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow())
 
         self.context_dict[session_id]['thread_id'] = thread_id  # Use the new thread key
         self.context_dict[session_id]['timestamp'] = datetime.utcnow().isoformat() + "Z"

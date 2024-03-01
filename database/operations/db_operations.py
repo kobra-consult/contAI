@@ -35,13 +35,13 @@ class DatabaseManager:
             except (psycopg2.Error, Exception) as e:
                 print(f"Error: {e}")
 
-    def insert_statistics(self, conn, role, completion_id, model, completion_tokens, prompt_tokens, total_tokens, system_fingerprint):
+    def insert_statistics(self, conn, statistics_id, role, completion_id, model, completion_tokens, prompt_tokens, total_tokens, system_fingerprint):
         with conn.cursor() as cursor:
             try:
                 cursor.execute("INSERT INTO statistics "
-                               "( role, completion_id, created_at, model, completion_tokens, prompt_tokens, total_tokens, system_fingerprint) "
-                               " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                               (role, completion_id, datetime.utcnow(), model, completion_tokens, prompt_tokens, total_tokens, system_fingerprint))
+                               "( statistics_id, role, completion_id, created_at, model, completion_tokens, prompt_tokens, total_tokens, system_fingerprint) "
+                               " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                               (statistics_id, role, completion_id, datetime.utcnow(), model, completion_tokens, prompt_tokens, total_tokens, system_fingerprint))
                 conn.commit()
             except (psycopg2.Error, Exception) as e:
                 print(f"Error: {e}")
