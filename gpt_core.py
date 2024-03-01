@@ -48,12 +48,24 @@ class GPTCore:
 
             msg_dict = {'role': role, 'content': content}
             self.context_dict[session_id]["messages"].append(msg_dict)
-            self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow(), "")
+            self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow())
 
         if response_data:
+            completion_id = response_data['id']
             role = 'assistant'
-            content = response_data['choices'][0]['message']['content']
-            self.db_manager.insert_message(self.conn, thread_id, role, content, datetime.utcnow(), response_data['id'])
+            completion_tokens = response_data['usage']['completion_tokens']
+            model = response_data['model']
+            prompt_tokens = response_data['usage']['prompt_tokens']
+            total_tokens = response_data['usage']['total_tokens']
+            system_fingerprint = response_data['system_fingerprint']
+            self.db_manager.insert_statistics(self.conn,
+                                              role=role,
+                                              completion_id=completion_id,
+                                              model=model,
+                                              completion_tokens=completion_tokens,
+                                              prompt_tokens=prompt_tokens,
+                                              total_tokens=total_tokens,
+                                              system_fingerprint=system_fingerprint)
             self.context_dict[session_id]["messages"][-1]["statistics"] = {'role': 'assistant',
                                                                            'content': response_data}
 
@@ -138,11 +150,6 @@ class GPTCore:
                 # temperature=0
             )
 
-            self.db_manager.insert_statistics(self.conn, 'assistant', completion.id, self.model,
-                                              completion.choices[0].message.usage['completion_tokens'],
-                                              completion.choices[0].message.usage['prompt_tokens'],
-                                              completion.choices[0].message.usage['total_tokens'],
-                                              completion.system_fingerprint)
             response_data = {
                 'id': completion.id,
                 'object': completion.object,
@@ -155,6 +162,7 @@ class GPTCore:
                              thread_id=thread_id,
                              messages=[{'role': 'assistant', 'content': completion.choices[0].message.content}],
                              response_data=response_data)
+
             print(json.dumps(self.context_dict, indent=4), "\n\n")
             return completion.model_dump_json()
         except openai.APIConnectionError as e:
