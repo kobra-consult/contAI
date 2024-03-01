@@ -28,7 +28,6 @@ class GPTCore:
         self.model = utils.get_env("MODEL")
         self.context_dict = configs.context_dict
         self.threads_dict = configs.threads_dict
-        self.tokens_authentication = configs.tokens_authentication
         self.db_config = load_config()
         self.db_manager = DatabaseManager(self.db_config)
         self.conn = None

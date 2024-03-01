@@ -1,3 +1,4 @@
+from auth.authetication import Auth
 from flask import Blueprint, Flask, request, jsonify
 from gpt_core import GPTCore
 from openai import AuthenticationError
@@ -10,6 +11,7 @@ app = Flask(__name__)
 gpt_core_calls = Blueprint('gpt_core', __name__, template_folder='templates')
 
 gpt_core_instance = GPTCore()
+gpt_auth = Auth()
 
 
 class Endpoints:
@@ -20,7 +22,7 @@ class Endpoints:
         token_authentication = data.get('token', None)
 
         # Add token to the list of valid authentication tokens
-        gpt_core_instance.tokens_authentication.add(token_authentication)
+        gpt_auth.tokens_authentication.add(token_authentication)
 
         return jsonify({'status': 'Authentication successful'})
 
