@@ -1,3 +1,5 @@
+from jwt import ExpiredSignatureError
+
 from auth.authetication import Auth
 from flask import Blueprint, Flask, request, jsonify
 from gpt_core import GPTCore
@@ -16,37 +18,63 @@ gpt_auth = Auth()
 
 class Endpoints:
     @staticmethod
-    @gpt_core_calls.route('/api/authenticate', methods=['POST'])
+    @gpt_core_calls.route('/api/auth', methods=['POST'])
+    def auth():
+        data = request.json
+        # Add token to the list of valid authentication tokens
+        token = gpt_auth.set_jwt_token(data)
+        return token
+
+    @staticmethod
+    @gpt_core_calls.route('/api/token', methods=['POST'])
     def authenticate():
         data = request.json
         token_authentication = data.get('token', None)
-
         # Add token to the list of valid authentication tokens
-        gpt_auth.tokens_authentication.add(token_authentication)
-
-        return jsonify({'status': 'Authentication successful'})
+        response, status_code = gpt_auth.check_token(token_authentication)
+        return jsonify(response), status_code
 
     @staticmethod
     @gpt_core_calls.route('/api/start_thread', methods=['POST'])
     def start_new_thread():
-        data = request.json
-        session_id = data.get('session_id', utils.generate_new_id())
-        # Start a new thread and get the thread_id
-        thread_id = gpt_core_instance.start_thread(session_id)
+        try:
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
 
-        return jsonify({'status': 'Thread started', 'session_id': session_id, 'thread_id': thread_id})
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
+
+            data = request.json
+            session_id = data.get('session_id', utils.generate_new_id())
+            # Start a new thread and get the thread_id
+            thread_id = gpt_core_instance.start_thread(session_id)
+
+            return jsonify({'status': 'Thread started', 'session_id': session_id, 'thread_id': thread_id})
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     @staticmethod
     @gpt_core_calls.route('/api/question', methods=['POST'])
     def send_q():
-        # Extract data from the request
-        data = json.loads(request.data)
-        # token_authentication = data.get('token', '')
-
         try:
-            # Verify authentication
-            # if not gpt_core.verify_authentication(token_authentication):
-            #     return jsonify({'error': 'Invalid authentication'}), 401
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
+
+            # Extract data from the request
+            data = json.loads(request.data)
 
             # Generate a new session_id if not provided
             session_id = data.get('session_id', utils.generate_new_id())
@@ -72,7 +100,8 @@ class Endpoints:
                     return response
 
             # Prepare the payload for OpenAI API
-            message_payload = [{'role': 'system', 'content': msg['instruction']} for msg in messages if msg.get('instruction')] + \
+            message_payload = [{'role': 'system', 'content': msg['instruction']} for msg in messages if
+                               msg.get('instruction')] + \
                               [{'role': 'user', 'content': msg['question']} for msg in messages if msg.get('question')]
 
             completion = asyncio.run(gpt_core_instance.run_questions(session_id, thread_id, message_payload))
@@ -83,87 +112,181 @@ class Endpoints:
                 mimetype='application/json'
             )
             return response
-        except AuthenticationError as e:
-            # Handle AuthenticationError separately
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
             return jsonify({'error': 'Authentication failed'}), 401
-        except Exception as e:
-            print(e)
-            # Handle other exceptions
-            return jsonify({'error': 'An unexpected error occurred'}), 500
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     @staticmethod
     @gpt_core_calls.route("/api/threads")
     def get_threads():
-        response = app.response_class(
-            response=asyncio.run(gpt_core_instance.list_threads()),
-            status=200,
-            mimetype='application/json')
-        return response
+        try:
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
+            response = app.response_class(
+                response=asyncio.run(gpt_core_instance.list_threads()),
+                status=200,
+                mimetype='application/json')
+            return response
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     @staticmethod
     @gpt_core_calls.route("/api/threads-message/<string:thread_id>")
     def get_thread_message(thread_id):
-        thread_message = asyncio.run(gpt_core_instance.get_thread_message(thread_id))
-        if not json.loads(thread_message)['data']:
-            err = {"error": "No thread message"}
+        try:
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
+
+            thread_message = asyncio.run(gpt_core_instance.get_thread_message(thread_id))
+            if not json.loads(thread_message)['data']:
+                err = {"error": "No thread message"}
+                response = app.response_class(
+                    response=json.dumps(err),
+                    status=404,
+                    mimetype='application/json')
+                return response
+
             response = app.response_class(
-                response=json.dumps(err),
-                status=404,
+                response=thread_message,
+                status=200,
                 mimetype='application/json')
             return response
-        response = app.response_class(
-            response=thread_message,
-            status=200,
-            mimetype='application/json')
-        return response
+
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     @staticmethod
     @gpt_core_calls.route('/api/history', methods=['GET'])
     def get_history():
-        data = request.args
-        session_id = data.get('session_id', utils.generate_new_id())
+        try:
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
 
-        if session_id not in gpt_core_instance.context_dict:
-            return jsonify({'error': 'Invalid session ID'}), 400
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
 
-        history = gpt_core_instance.context_dict[session_id]
+            data = request.args
+            session_id = data.get('session_id', utils.generate_new_id())
 
-        return jsonify({'history': history, 'session_id': session_id})
+            if session_id not in gpt_core_instance.context_dict:
+                return jsonify({'error': 'Invalid session ID'}), 400
+
+            history = gpt_core_instance.context_dict[session_id]
+
+            return jsonify({'history': history, 'session_id': session_id})
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     @staticmethod
     @gpt_core_calls.route('/api/feedback', methods=['POST'])
     def user_feedback():
-        data = request.json
-        session_id = data.get('session_id', utils.generate_new_id())
-        user_feedback = data.get('user_feedback', '')
+        try:
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
 
-        # TODO
-        # Process user feedback (implement)
-        # Send feedback to OpenAI to improve the model
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
 
-        return jsonify({'status': 'Feedback received', 'session_id': session_id})
+            data = request.json
+            session_id = data.get('session_id', utils.generate_new_id())
+            user_feedback = data.get('user_feedback', '')
+
+            # TODO
+            # Process user feedback (implement)
+            # Send feedback to OpenAI to improve the model
+            return jsonify({'status': 'Feedback received', 'session_id': session_id})
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     @staticmethod
     @gpt_core_calls.route('/api/reset', methods=['POST'])
     def reset_conversation():
-        data = request.json
-        session_id = data.get('session_id', utils.generate_new_id())
+        try:
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
 
-        # Reset conversation context for the provided session
-        gpt_core_instance.context_dict[session_id] = {}
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
 
-        return jsonify({'status': 'Conversation reset', 'session_id': session_id})
+            data = request.json
+            session_id = data.get('session_id', utils.generate_new_id())
+
+            # Reset conversation context for the provided session
+            gpt_core_instance.context_dict[session_id] = {}
+
+            return jsonify({'status': 'Conversation reset', 'session_id': session_id})
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     # Endpoint to configure the parameters
     @staticmethod
     @gpt_core_calls.route('/api/config', methods=['POST'])
     def configure_parameters():
-        data = request.json
-        session_id = data.get('session_id', utils.generate_new_id())
-        max_tokens = data.get('max_tokens', 150)
+        try:
+            token_authentication = request.headers.get('Authorization')
+            if not token_authentication or not token_authentication.startswith('Bearer '):
+                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
 
-        # Configure parameters for the provided session
-        # You can add more configuration logic as needed
+            token = token_authentication.split(' ')[1]
+            token_checked = gpt_auth.check_token(token)
+            if 'error' in token_checked[0]:
+                return jsonify(token_checked[0]), 401
 
-        return jsonify({'status': 'Configuration applied', 'session_id': session_id})
+            data = request.json
+            session_id = data.get('session_id', utils.generate_new_id())
+            max_tokens = data.get('max_tokens', 150)
 
+            # Configure parameters for the provided session
+            # You can add more configuration logic as needed
+
+            return jsonify({'status': 'Configuration applied', 'session_id': session_id})
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500

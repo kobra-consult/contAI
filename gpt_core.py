@@ -2,7 +2,6 @@ from database.config import config
 from database.config.config import load_config
 from database.operations.db_operations import DatabaseManager
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from openai import AsyncOpenAI, RateLimitError, APIStatusError
 from typing import Union, Dict, Any, List
 from utils import utils
@@ -30,6 +29,7 @@ class GPTCore:
         self.threads_dict = configs.threads_dict
         self.db_config = load_config()
         self.db_manager = DatabaseManager(self.db_config)
+        self.dotenv = configs.dotenv
         self.conn = None
 
     def set_message(self, session_id, thread_id, messages, response_data=None):
@@ -108,7 +108,7 @@ class GPTCore:
 
     @staticmethod
     def open_ai_config(API_KEY=None, ORG=None):
-        load_dotenv()
+
         if API_KEY is None:
             API_KEY = utils.get_env("API_KEY")
 

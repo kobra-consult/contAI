@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 # Dictionary to track authentication tokens
 tokens_authentication = set()
 
@@ -6,3 +7,5 @@ context_dict = dict()
 
 # Dictionary to track threads
 threads_dict = dict()
+
+dotenv = load_dotenv()
