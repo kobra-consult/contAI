@@ -17,10 +17,13 @@ class DatabaseManager:
             print(error)
             return None
 
-    def insert_session(self, conn, session_id):
+    def upsert_session(self, conn, session_id):
         with conn.cursor() as cursor:
             try:
-                cursor.execute("INSERT INTO session (session_id, created_at) VALUES (%s, %s)",
+                cursor.execute("INSERT INTO session (session_id, created_at) "
+                               "VALUES (%s, %s)"
+                               "ON CONFLICT (session_id) DO UPDATE "
+                               "SET created_at = EXCLUDED.created_at;",
                                (session_id, datetime.utcnow()))
                 conn.commit()
             except (psycopg2.Error, Exception) as e:

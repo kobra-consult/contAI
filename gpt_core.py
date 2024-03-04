@@ -88,7 +88,7 @@ class GPTCore:
         start_time = datetime.utcnow().isoformat() + "Z"
         end_time = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
 
-        self.db_manager.insert_session(self.conn, session_id)
+        self.db_manager.upsert_session(self.conn, session_id)
         self.db_manager.insert_thread(self.conn, thread_id, session_id, start_time, end_time, 'active')
         # Add the new thread to the threads dictionary
         self.threads_dict[thread_id] = {
