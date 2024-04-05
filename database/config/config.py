@@ -1,6 +1,6 @@
 import os.path
 from configparser import ConfigParser
-
+from urllib.parse import urlparse
 
 def load_config(filename='database.ini', section='postgresql'):
 
@@ -9,9 +9,9 @@ def load_config(filename='database.ini', section='postgresql'):
     if os.path.exists(filename):
         parser = ConfigParser()
         parser.read(filename)
-
         if parser.has_section(section):
             params = parser.items(section)
+
             for param in params:
                 config[param[0]] = param[1]
         else:
@@ -19,10 +19,13 @@ def load_config(filename='database.ini', section='postgresql'):
     else:
         db_url = os.getenv('DATABASE_URL')
         if db_url:
-            config['db_url'] = db_url
+            url_components = urlparse(db_url)
+            config = {
+                'user': url_components.username,
+                'password': url_components.password,
+                'host': url_components.hostname,
+                'port': url_components.port,
+                'database': url_components.path.lstrip('/')
+            }
 
-    if 'db_url' in config:
-        return config['db_url']
-    else:
-        connection_url = "postgres://{user}:{password}@{host}:{port}/{database}".format(**config)
-        return config, connection_url
+        return config
