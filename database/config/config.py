@@ -17,12 +17,12 @@ def load_config(filename='database.ini', section='postgresql'):
         else:
             raise Exception('Section {0} not found in the {1} file'.format(section, filename))
     else:
-        # Carrega variáveis de ambiente como configuração
-        config = {
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'database': os.getenv('DB_NAME', 'mydatabase'),
-            'user': os.getenv('DB_USER', 'myuser'),
-            'password': os.getenv('DB_PASS', 'mypassword'),
-            'port': os.getenv('DB_PORT', '5432')
-        }
-    return config
+        db_url = os.getenv('DATABASE_URL')
+        if db_url:
+            config['db_url'] = db_url
+
+    if 'db_url' in config:
+        return config['db_url']
+    else:
+        connection_url = "postgres://{user}:{password}@{host}:{port}/{database}".format(**config)
+        return config, connection_url
