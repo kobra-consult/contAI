@@ -167,8 +167,8 @@ class GPTCore:
                              messages=[{'role': 'assistant', 'content': completion.choices[0].message.content}],
                              response_data=response_data)
 
-            print(json.dumps(self.context_dict, indent=4), "\n\n")
-            return completion.model_dump_json()
+            # print(json.dumps(self.context_dict), "\n\n")
+            return json.dumps(self.context_dict)
         except openai.APIConnectionError as e:
             print(ValueError("The server could not be reached"))
             return e.__cause__  # an underlying Exception, likely raised within httpx.

@@ -2,6 +2,7 @@ from jwt import ExpiredSignatureError
 
 from auth.authetication import Auth
 from flask import Blueprint, Flask, request, jsonify
+from flask_cors import CORS, cross_origin
 from gpt_core import GPTCore
 from openai import AuthenticationError
 import asyncio
@@ -10,9 +11,12 @@ import json
 from utils import utils
 
 app = Flask(__name__)
+cors = CORS(app, resources={r"/api/*": {"origins": "http://localhost:5000"}})
+app.config['CORS_HEADERS'] = 'Content-Type'
 gpt_core_calls = Blueprint('gpt_core', __name__, template_folder='templates')
 
 gpt_core_instance = GPTCore()
+CORS(gpt_core_calls)
 gpt_auth = Auth()
 
 
@@ -38,14 +42,14 @@ class Endpoints:
     @gpt_core_calls.route('/api/start_thread', methods=['POST'])
     def start_new_thread():
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
 
             data = request.json
             session_id = data.get('session_id', utils.generate_new_id())
@@ -64,18 +68,17 @@ class Endpoints:
     @gpt_core_calls.route('/api/question', methods=['POST'])
     def send_q():
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
 
             # Extract data from the request
             data = json.loads(request.data)
-
             # Generate a new session_id if not provided
             session_id = data.get('session_id', utils.generate_new_id())
             # Check if a thread already exists for the session
@@ -87,7 +90,7 @@ class Endpoints:
                 thread_id = gpt_core_instance.context_dict[session_id]['thread_id']
 
             # Extract messages from the request
-            messages = data.get('content', [])
+            messages = data.get("content", [])
 
             # Validate the presence of 'instruction' and 'question' in messages
             for msg in messages:
@@ -111,6 +114,8 @@ class Endpoints:
                 status=200,
                 mimetype='application/json'
             )
+            header = response.headers
+            header['Access-Control-Allow-Origin'] = '*'
             return response
         except ExpiredSignatureError:
             return jsonify({'error': 'Token expired'}), 401
@@ -123,14 +128,14 @@ class Endpoints:
     @gpt_core_calls.route("/api/threads")
     def get_threads():
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
             response = app.response_class(
                 response=asyncio.run(gpt_core_instance.list_threads()),
                 status=200,
@@ -147,14 +152,14 @@ class Endpoints:
     @gpt_core_calls.route("/api/threads-message/<string:thread_id>")
     def get_thread_message(thread_id):
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
 
             thread_message = asyncio.run(gpt_core_instance.get_thread_message(thread_id))
             if not json.loads(thread_message)['data']:
@@ -182,14 +187,14 @@ class Endpoints:
     @gpt_core_calls.route('/api/history', methods=['GET'])
     def get_history():
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
 
             data = request.args
             session_id = data.get('session_id', utils.generate_new_id())
@@ -211,14 +216,14 @@ class Endpoints:
     @gpt_core_calls.route('/api/feedback', methods=['POST'])
     def user_feedback():
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
 
             data = request.json
             session_id = data.get('session_id', utils.generate_new_id())
@@ -239,14 +244,14 @@ class Endpoints:
     @gpt_core_calls.route('/api/reset', methods=['POST'])
     def reset_conversation():
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
 
             data = request.json
             session_id = data.get('session_id', utils.generate_new_id())
@@ -267,14 +272,14 @@ class Endpoints:
     @gpt_core_calls.route('/api/config', methods=['POST'])
     def configure_parameters():
         try:
-            token_authentication = request.headers.get('Authorization')
-            if not token_authentication or not token_authentication.startswith('Bearer '):
-                return jsonify({'error': 'Invalid or missing Bearer token'}), 401
-
-            token = token_authentication.split(' ')[1]
-            token_checked = gpt_auth.check_token(token)
-            if 'error' in token_checked[0]:
-                return jsonify(token_checked[0]), 401
+            # token_authentication = request.headers.get('Authorization')
+            # if not token_authentication or not token_authentication.startswith('Bearer '):
+            #     return jsonify({'error': 'Invalid or missing Bearer token'}), 401
+            #
+            # token = token_authentication.split(' ')[1]
+            # token_checked = gpt_auth.check_token(token)
+            # if 'error' in token_checked[0]:
+            #     return jsonify(token_checked[0]), 401
 
             data = request.json
             session_id = data.get('session_id', utils.generate_new_id())
