@@ -5,7 +5,6 @@ Flask_RESTful==0.3.10
 openai==1.16.2
 psycopg2==2.9.9
 psycopg2_binary==2.9.9
-PyJWT==2.3.0
 PyJWT==2.8.0
 python-dotenv==1.0.1
 tiktoken==0.6.0
