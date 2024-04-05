@@ -25,4 +25,5 @@ def load_config(filename='database.ini', section='postgresql'):
             'password': os.getenv('DB_PASS', 'mypassword'),
             'port': os.getenv('DB_PORT', '5432')
         }
+    connection_url = "postgres://{user}:{password}@{host}:{port}/{database}".format(**config)
     return config
