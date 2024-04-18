@@ -5,22 +5,26 @@ from flask import Blueprint, Flask, request, jsonify
 from flask_cors import CORS, cross_origin
 from gpt_core import GPTCore
 from openai import AuthenticationError
+from utils import utils
 import asyncio
 import json
-
-from utils import utils
+import logging
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/api/*": {"origins": "http://localhost:5000"}})
 app.config['CORS_HEADERS'] = 'Content-Type'
 gpt_core_calls = Blueprint('gpt_core', __name__, template_folder='templates')
 
-gpt_core_instance = GPTCore()
 CORS(gpt_core_calls)
 gpt_auth = Auth()
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 
 class Endpoints:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.gpt_core_instance = GPTCore(self.logger)
+
     @staticmethod
     @gpt_core_calls.route('/api/auth', methods=['POST'])
     def auth():
@@ -54,7 +58,7 @@ class Endpoints:
             data = request.json
             session_id = data.get('session_id', utils.generate_new_id())
             # Start a new thread and get the thread_id
-            thread_id = gpt_core_instance.start_thread(session_id)
+            thread_id = self.gpt_core_instance.start_thread(session_id)
 
             return jsonify({'status': 'Thread started', 'session_id': session_id, 'thread_id': thread_id})
         except ExpiredSignatureError:
@@ -63,6 +67,29 @@ class Endpoints:
             return jsonify({'error': 'Authentication failed'}), 401
         except Exception as unexpected_error:
             return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
+
+
+    @staticmethod
+    @gpt_core_calls.route('/api/approval_lists', methods=['POST'])
+    def approved_lists():
+        try:
+            # Extract data from the request
+            data = json.loads(request.data)
+            # Generate a new session_id if not provided
+            data['session_id'] = data.get('session_id', utils.generate_new_id())
+
+            result = self.gpt_core_instance.approved_lists_core(data)
+            response = app.response_class(
+                response=result,
+                status=200,
+                mimetype='application/json'
+            )
+            header = response.headers
+            header['Access-Control-Allow-Origin'] = '*'
+            return response
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error on Approved_Lists: {unexpected_error}'}), 500
+
 
     @staticmethod
     @gpt_core_calls.route('/api/question', methods=['POST'])
@@ -82,12 +109,12 @@ class Endpoints:
             # Generate a new session_id if not provided
             session_id = data.get('session_id', utils.generate_new_id())
             # Check if a thread already exists for the session
-            if session_id not in gpt_core_instance.context_dict:
+            if session_id not in self.gpt_core_instance.context_dict:
                 # If not, create a new thread
-                thread_id = asyncio.run(gpt_core_instance.start_thread(session_id))
+                thread_id = asyncio.run(self.gpt_core_instance.start_thread(session_id))
             else:
                 # If yes, use the existing thread
-                thread_id = gpt_core_instance.context_dict[session_id]['thread_id']
+                thread_id = self.gpt_core_instance.context_dict[session_id]['thread_id']
 
             # Extract messages from the request
             messages = data.get("content", [])
@@ -107,7 +134,7 @@ class Endpoints:
                                msg.get('instruction')] + \
                               [{'role': 'user', 'content': msg['question']} for msg in messages if msg.get('question')]
 
-            completion = asyncio.run(gpt_core_instance.run_questions(session_id, thread_id, message_payload))
+            completion = asyncio.run(self.gpt_core_instance.run_questions(session_id, thread_id, message_payload))
             # TODO validate errors
             response = app.response_class(
                 response=completion,
@@ -137,7 +164,7 @@ class Endpoints:
             # if 'error' in token_checked[0]:
             #     return jsonify(token_checked[0]), 401
             response = app.response_class(
-                response=asyncio.run(gpt_core_instance.list_threads()),
+                response=asyncio.run(self.gpt_core_instance.list_threads()),
                 status=200,
                 mimetype='application/json')
             return response
@@ -161,7 +188,7 @@ class Endpoints:
             # if 'error' in token_checked[0]:
             #     return jsonify(token_checked[0]), 401
 
-            thread_message = asyncio.run(gpt_core_instance.get_thread_message(thread_id))
+            thread_message = asyncio.run(self.gpt_core_instance.get_thread_message(thread_id))
             if not json.loads(thread_message)['data']:
                 err = {"error": "No thread message"}
                 response = app.response_class(
@@ -199,10 +226,10 @@ class Endpoints:
             data = request.args
             session_id = data.get('session_id', utils.generate_new_id())
 
-            if session_id not in gpt_core_instance.context_dict:
+            if session_id not in self.gpt_core_instance.context_dict:
                 return jsonify({'error': 'Invalid session ID'}), 400
 
-            history = gpt_core_instance.context_dict[session_id]
+            history = self.gpt_core_instance.context_dict[session_id]
 
             return jsonify({'history': history, 'session_id': session_id})
         except ExpiredSignatureError:
@@ -257,7 +284,7 @@ class Endpoints:
             session_id = data.get('session_id', utils.generate_new_id())
 
             # Reset conversation context for the provided session
-            gpt_core_instance.context_dict[session_id] = {}
+            self.gpt_core_instance.context_dict[session_id] = {}
 
             return jsonify({'status': 'Conversation reset', 'session_id': session_id})
         except ExpiredSignatureError:
