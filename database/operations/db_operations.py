@@ -36,11 +36,11 @@ class DatabaseManager:
             try:
                 cursor.execute("INSERT INTO contai.approved_lists (session_id, id, is_approved, leads_quantity, link, name, synced_at, created_at, updated_at) "
                                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                               "ON CONFLICT (session_id) DO UPDATE "
+                               "ON CONFLICT (session_id, id) DO UPDATE "
                                "SET synced_at = EXCLUDED.synced_at "
                                "  , created_at = EXCLUDED.created_at "
-                               "  , updated_at = EXCLUDED.updated_at;"),
-                (session_id, id, is_approved, leads_quantity, link, name, synced_at, datetime.utcnow(), datetime.utcnow())
+                               "  , updated_at = EXCLUDED.updated_at;",
+                               (session_id, id, is_approved, leads_quantity, link, name, synced_at, datetime.utcnow(), datetime.utcnow()))
                 conn.commit()
                 self.logger.info(f'List Approved - session_id: {session_id} List: {id}')
             except (psycopg2.Error, Exception) as e:

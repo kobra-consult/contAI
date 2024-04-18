@@ -113,6 +113,7 @@ class GPTCore:
             # Connect to the database
             self.connect_to_db()
             session_id = data['session_id']
+
             for lst in data['lists']:
                 id = lst['id']
                 is_approved = lst['is_approved']
@@ -121,6 +122,7 @@ class GPTCore:
                 name = lst['name']
                 synced_at = lst['synced_at']
                 self.db_manager.upsert_approved_list(self.conn, session_id, id, is_approved, leads_qty, link, name, synced_at)
+
             return jsonify({'session_id': session_id})
         except Exception as unexpected_error:
             return jsonify({'error': f'Unexpected error on Approved_Lists GPT_CORE: {unexpected_error}'})
