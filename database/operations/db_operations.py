@@ -3,8 +3,9 @@ import psycopg2
 
 
 class DatabaseManager:
-    def __init__(self, config):
+    def __init__(self, config, logger):
         self.config = config
+        self.logger = logger
 
     def connect(self):
         """Connect to the PostgresSQL database server"""
@@ -26,8 +27,9 @@ class DatabaseManager:
                                "SET created_at = EXCLUDED.created_at;",
                                (session_id, datetime.utcnow()))
                 conn.commit()
+                self.logger.info(f'Session executed - session_id: {session_id}')
             except (psycopg2.Error, Exception) as e:
-                print(f"Error on UPSERT_SESSION: {e}")
+                self.logger.error(f'Error on UPSERT_SESSION: {e}')
 
     def upsert_approved_list(self, conn, session_id, id, is_approved, leads_quantity, link, name, synced_at):
         with conn.cursor() as cursor:
@@ -40,8 +42,9 @@ class DatabaseManager:
                                "  , updated_at = EXCLUDED.updated_at;"),
                 (session_id, id, is_approved, leads_quantity, link, name, synced_at, datetime.utcnow(), datetime.utcnow())
                 conn.commit()
+                self.logger.info(f'List Approved - session_id: {session_id} List: {id}')
             except (psycopg2.Error, Exception) as e:
-                print(f"Error on UPSERT_APPROVED_LIST: {e}")
+                self.logger.error(f"Error on UPSERT_APPROVED_LIST: {e}")
 
     def insert_thread(self, conn, thread_id, session_id, start_time, end_time, status):
         with conn.cursor() as cursor:
@@ -49,6 +52,7 @@ class DatabaseManager:
                 cursor.execute("INSERT INTO contai.thread (thread_id, session_id, start_time, end_time, status) VALUES " 
                                "(%s, %s, %s, %s, %s)", (thread_id, session_id, start_time, end_time, status))
                 conn.commit()
+                self.logger.info(f'Thread - session_id: {session_id} thread_id: {thread_id}')
             except (psycopg2.Error, Exception) as e:
                 print(f"Error on INSERT_THREAD: {e}")
 
@@ -60,8 +64,9 @@ class DatabaseManager:
                                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                                (statistics_id, role, completion_id, datetime.utcnow(), model, completion_tokens, prompt_tokens, total_tokens, system_fingerprint))
                 conn.commit()
+                self.logger.info(f'Statistics - statistics_id: {statistics_id}')
             except (psycopg2.Error, Exception) as e:
-                print(f"Error on INSERT_STATISTICS: {e}")
+                self.logger.error(f"Error on INSERT_STATISTICS: {e}")
 
     def insert_message(self, conn, thread_id, role, content, timestamp, statistics_id=None):
         with conn.cursor() as cursor:
@@ -70,6 +75,7 @@ class DatabaseManager:
                                "VALUES (%s, %s, %s, %s, %s)",
                                (thread_id, role, content, timestamp, statistics_id))
                 conn.commit()
+                self.logger.info(f'Messages - thread_id: {thread_id}')
             except (psycopg2.Error, Exception) as e:
-                print(f"Error on INSERT_MESSAGE: {e}")
+                self.logger.error(f"Error on INSERT_MESSAGE: {e}")
 

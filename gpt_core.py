@@ -1,3 +1,5 @@
+from flask import jsonify
+
 from database.config import config
 from database.config.config import load_config
 from database.operations.db_operations import DatabaseManager
@@ -23,14 +25,39 @@ message = [
 
 
 class GPTCore:
-    def __init__(self):
+    def __init__(self, logger):
+        self.logger = logger
         self.model = utils.get_env("MODEL")
         self.context_dict = configs.context_dict
         self.threads_dict = configs.threads_dict
         self.db_config = load_config()
-        self.db_manager = DatabaseManager(self.db_config)
+        self.db_manager = DatabaseManager(self.db_config, self.logger)
         self.dotenv = configs.dotenv
         self.conn = None
+
+    def connect_to_db(self):
+        """Connect to the database."""
+        if not self.conn or self.conn.closed != 0:
+            self.conn = self.db_manager.connect()
+
+    def close_db_connection(self):
+        """Close the database connection."""
+        if self.conn:
+            self.conn.close()
+            self.logger.info("Connection to the database closed.")
+
+    @staticmethod
+    def open_ai_config(API_KEY=None, ORG=None):
+
+        if API_KEY is None:
+            API_KEY = utils.get_env("API_KEY")
+
+        if ORG is None:
+            ORG = utils.get_env("ORG")
+
+        client_ai = AsyncOpenAI(api_key=API_KEY, organization=ORG)
+
+        return client_ai
 
     def set_message(self, session_id, thread_id, messages, response_data=None):
         self.connect_to_db()
@@ -76,6 +103,28 @@ class GPTCore:
         self.context_dict[session_id]['thread_id'] = thread_id  # Use the new thread key
         self.context_dict[session_id]['timestamp'] = datetime.utcnow().isoformat() + "Z"
 
+    def approved_lists_core(self, data):
+        """
+        :param data: payload with list of lists approved
+        :return: Confirmation of approved lists or Exception
+        """
+
+        try:
+            # Connect to the database
+            self.connect_to_db()
+            session_id = data['session_id']
+            for lst in data['lists']:
+                id = lst['id']
+                is_approved = lst['is_approved']
+                leads_qty = lst['leads_quantity']
+                link = lst['link']
+                name = lst['name']
+                synced_at = lst['synced_at']
+                self.db_manager.upsert_approved_list(self.conn, session_id, id, is_approved, leads_qty, link, name, synced_at)
+            return jsonify({'session_id': session_id})
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error on Approved_Lists GPT_CORE: {unexpected_error}'})
+
     # Authentication verification function
     def verify_authentication(self, token):
         return token in self.tokens_authentication
@@ -103,32 +152,8 @@ class GPTCore:
             "thread_id": thread_id,
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
-
+        self.logger.info("New thread started - session_id: %s", session_id)
         return thread_id
-
-    @staticmethod
-    def open_ai_config(API_KEY=None, ORG=None):
-
-        if API_KEY is None:
-            API_KEY = utils.get_env("API_KEY")
-
-        if ORG is None:
-            ORG = utils.get_env("ORG")
-
-        client_ai = AsyncOpenAI(api_key=API_KEY, organization=ORG)
-
-        return client_ai
-
-    def connect_to_db(self):
-        """Connect to the database."""
-        if not self.conn or self.conn.closed != 0:
-            self.conn = self.db_manager.connect()
-
-    def close_db_connection(self):
-        """Close the database connection."""
-        if self.conn:
-            self.conn.close()
-            print("Connection to the database closed.")
 
     async def run_questions(self, session_id: str, thread_id: str, messages: List[Dict[str, str]]) -> Union[
         str, BaseException, None, RateLimitError, APIStatusError]:
@@ -139,12 +164,10 @@ class GPTCore:
         :return: Dict[str, Any] or Exception
         """
 
-        client = self.open_ai_config()
-        # Connect to the database
-        self.connect_to_db()
-
         try:
-
+            client = self.open_ai_config()
+            # Connect to the database
+            self.connect_to_db()
             self.set_message(session_id, thread_id, messages)
             completion = await client.chat.completions.create(
                 model=self.model,
@@ -166,17 +189,17 @@ class GPTCore:
                              thread_id=thread_id,
                              messages=[{'role': 'assistant', 'content': completion.choices[0].message.content}],
                              response_data=response_data)
-
+            self.logger.info("Question executed - session_id: %s", session_id)
             # print(json.dumps(self.context_dict), "\n\n")
             return json.dumps(self.context_dict)
         except openai.APIConnectionError as e:
-            print(ValueError("The server could not be reached"))
+            self.logger.error(ValueError("The server could not be reached"))
             return e.__cause__  # an underlying Exception, likely raised within httpx.
         except openai.RateLimitError as e:
-            print(ValueError("A 429 status code was received; we should back off a bit."))
+            self.logger.error(ValueError("A 429 status code was received; we should back off a bit."))
             return e
         except openai.APIStatusError as e:
-            print(ValueError("Another non-200-range status code was received"))
+            self.logger.error(ValueError("Another non-200-range status code was received"))
             return e
 
     def list_threads(self):
@@ -202,19 +225,3 @@ class GPTCore:
         else:
             return json.dumps({"error": "Thread not found"}), 404
 
-# keys = utils.read_file("utils/keys_auth.json")
-
-# message = run_questions().choices[0].message.content
-
-# print(num_tokens_from_messages(message))
-# thread_id = list_threads()
-# print(thread_id)
-# print(get_thread_message(thread_id.id))
-
-# async def main() -> None:
-#     completion = await run_questions(message)
-#     print(completion)
-#     print(num_tokens_from_messages(message, model))
-
-
-# asyncio.run(main())
