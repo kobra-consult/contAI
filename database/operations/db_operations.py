@@ -18,14 +18,34 @@ class DatabaseManager:
             print(error)
             return None
 
-    def upsert_session(self, conn, session_id):
+    def select_message(self, conn, session_id):
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute("SELECT s.session_id "
+                               "     , t.start_time "
+                               "     , m.thread_id "
+                               "     , m.role "
+                               "     , m.content "
+                               "FROM contai.session s "
+                               "JOIN contai.thread t ON t.session_id = s.session_id "
+                               "JOIN contai.message m ON m.thread_id = t.thread_id "
+                               "WHERE s.session_id = %s "
+                               "ORDER BY m.timestamp ;", (session_id,))
+                self.logger.info(f'Select executed - session_id: {session_id}')
+                columns = [col[0] for col in cursor.description]
+                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                return results
+            except (psycopg2.Error, Exception) as e:
+                self.logger.error(f'Error on SELECT_MESSAGE: {e}')
+
+    def upsert_session(self, conn, session_id, created_at):
         with conn.cursor() as cursor:
             try:
                 cursor.execute("INSERT INTO contai.session (session_id, created_at) "
                                "VALUES (%s, %s) "
                                "ON CONFLICT (session_id) DO UPDATE "
                                "SET created_at = EXCLUDED.created_at;",
-                               (session_id, datetime.utcnow()))
+                               (session_id, created_at))
                 conn.commit()
                 self.logger.info(f'Session executed - session_id: {session_id}')
             except (psycopg2.Error, Exception) as e:

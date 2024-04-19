@@ -139,7 +139,7 @@ class GPTCore:
         start_time = datetime.utcnow().isoformat() + "Z"
         end_time = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
 
-        self.db_manager.upsert_session(self.conn, session_id)
+        self.db_manager.upsert_session(self.conn, session_id, start_time)
         self.db_manager.insert_thread(self.conn, thread_id, session_id, start_time, end_time, 'active')
         # Add the new thread to the threads dictionary
         self.threads_dict[thread_id] = {
@@ -152,7 +152,7 @@ class GPTCore:
         # Add session_id to context_dict
         self.context_dict[session_id] = {
             "thread_id": thread_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": start_time
         }
         self.logger.info("New thread started - session_id: %s", session_id)
         return thread_id
@@ -192,8 +192,8 @@ class GPTCore:
                              messages=[{'role': 'assistant', 'content': completion.choices[0].message.content}],
                              response_data=response_data)
             self.logger.info("Question executed - session_id: %s", session_id)
-            # print(json.dumps(self.context_dict), "\n\n")
-            return json.dumps(self.context_dict)
+            messages = self.get_messages(session_id=session_id)
+            return json.dumps(messages)
         except openai.APIConnectionError as e:
             self.logger.error(ValueError("The server could not be reached"))
             return e.__cause__  # an underlying Exception, likely raised within httpx.
@@ -203,6 +203,45 @@ class GPTCore:
         except openai.APIStatusError as e:
             self.logger.error(ValueError("Another non-200-range status code was received"))
             return e
+
+    def get_messages(self, session_id):
+        try:
+            self.connect_to_db()
+            messages = self.db_manager.select_message(self.conn, session_id=session_id)
+            formatted_messages = []
+            session_details = None
+            for message in messages:
+                if not session_details or session_details['session_id'] != message['session_id']:
+
+                    session_details = {
+                        'session_id': message['session_id'],
+                        'threads': []
+                    }
+                    formatted_messages.append(session_details)
+                thread_exists = False
+                for thread in session_details['threads']:
+                    if thread['thread_id'] == message['thread_id']:
+                        thread_exists = True
+                        thread['messages'].append({
+                            'role': message['role'],
+                            'content': message['content']
+                        })
+                        break
+                if not thread_exists:
+                    session_details['threads'].append({
+                        'timestamp': message['start_time'].strftime('%Y-%m-%d %H:%M:%S'),
+                        'thread_id': message['thread_id'],
+                        'messages': [{
+                            'role': message['role'],
+                            'content': message['content']
+                        }]
+                    })
+
+            return formatted_messages
+        except Exception as e:
+            self.logger.error(ValueError(f"Error on getting messages - {e}"))
+            return e
+
 
     def list_threads(self):
         # Fetch information about local threads from context_dict
