@@ -30,6 +30,12 @@ class DatabaseManager:
                                "JOIN contai.thread t ON t.session_id = s.session_id "
                                "JOIN contai.message m ON m.thread_id = t.thread_id "
                                "WHERE s.session_id = %s "
+                               "  AND m.statistics_id IS NOT NULL"
+                               "GROUP BY s.session_id "
+                               "       , t.start_time "
+                               "       , m.thread_id "
+                               "       , m.role "
+                               "       , m.content "
                                "ORDER BY m.timestamp ;", (session_id,))
                 self.logger.info(f'Select executed - session_id: {session_id}')
                 columns = [col[0] for col in cursor.description]
