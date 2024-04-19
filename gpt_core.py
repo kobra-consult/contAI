@@ -193,7 +193,7 @@ class GPTCore:
                              response_data=response_data)
             self.logger.info("Question executed - session_id: %s", session_id)
             messages = self.get_messages(session_id=session_id)
-            return json.dumps(messages)
+            return messages
         except openai.APIConnectionError as e:
             self.logger.error(ValueError("The server could not be reached"))
             return e.__cause__  # an underlying Exception, likely raised within httpx.
@@ -237,11 +237,10 @@ class GPTCore:
                         }]
                     })
 
-            return formatted_messages
+            return json.dumps(formatted_messages)
         except Exception as e:
             self.logger.error(ValueError(f"Error on getting messages - {e}"))
             return e
-
 
     def list_threads(self):
         # Fetch information about local threads from context_dict

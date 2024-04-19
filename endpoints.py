@@ -151,6 +151,27 @@ class Endpoints:
             return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
 
     @staticmethod
+    @gpt_core_calls.route("/api/session_messages/<string:session_id>")
+    def get_session_messages(session_id):
+        try:
+            messages = gpt_core_instance.get_messages(session_id)
+            # TODO validate errors
+            response = app.response_class(
+                response=messages,
+                status=200,
+                mimetype='application/json'
+            )
+            header = response.headers
+            header['Access-Control-Allow-Origin'] = '*'
+            return response
+        except ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except AuthenticationError:
+            return jsonify({'error': 'Authentication failed'}), 401
+        except Exception as unexpected_error:
+            return jsonify({'error': f'Unexpected error: {unexpected_error}'}), 500
+
+    @staticmethod
     @gpt_core_calls.route("/api/threads")
     def get_threads():
         try:
