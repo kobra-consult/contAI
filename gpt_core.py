@@ -208,6 +208,7 @@ class GPTCore:
         try:
             self.connect_to_db()
             messages = self.db_manager.select_message(self.conn, session_id=session_id)
+            print(messages)
             formatted_messages = []
             session_details = None
             for message in messages:
