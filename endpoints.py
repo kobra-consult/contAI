@@ -75,7 +75,7 @@ class Endpoints:
             data = json.loads(request.data)
 
             # Generate a new session_id if not provided
-            data['session_id'] = data.get('session_id', utils.generate_new_id())
+            data['session_id'] = data['session_id'] if data.get('session_id') is not None else utils.generate_new_id()
             resp = gpt_core_instance.approved_lists_core(data)
 
             response = app.response_class(
